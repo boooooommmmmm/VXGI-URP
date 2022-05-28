@@ -1,0 +1,92 @@
+﻿#pragma kernel CSAggregate D3D11
+#pragma kernel CSAggregate
+#pragma kernel CSClear
+#pragma kernel CSRender
+
+#include "../Structs/VoxelData.cginc"
+#include "../Structs/VoxelLightingData.hlsl"
+#include "../Radiances/Voxel.cginc"
+
+#define RADIANCE_PRECISION 256.0
+
+RWTexture3D<uint> RadianceRG;
+RWTexture3D<uint> RadianceBA;
+RWTexture3D<uint> RadianceCount;
+RWTexture3D<float4> Target;
+ConsumeStructuredBuffer<VoxelData> VoxelBuffer;
+
+[numthreads(4,4,4)]
+void CSAggregate(uint3 id : SV_DispatchThreadID)
+{
+  if (any(id >= Resolution)) return;
+
+  // FIXME
+  // It looks stupid, due to a bug in HLSL to GLSL translator (case 1241093).
+  // This is an only workaround I can think of.
+  uint rg = RadianceRG[id];
+  uint ba = RadianceBA.Load(id);
+  uint count = RadianceCount[id];
+
+  if (count > 0u) {
+    float4 color = uint4(
+      rg & 0xffff,
+      rg >> 16u,
+      ba & 0xffff,
+      ba >> 16u
+    ) / RADIANCE_PRECISION;
+
+    Target[id] = color / count;//Resolve color from RGBA buffer to Radiance0(3D texture) 
+  } else {
+#ifdef D3D11
+    // Write only when necessary
+    if (any(Target[id])) Target[id] = 0.0;
+#else
+    Target[id] = 0.0;
+#endif
+  }
+}
+
+[numthreads(4,4,4)]
+void CSClear(uint3 id : SV_DispatchThreadID)
+{
+	//Clear kernal dispatch use
+	//Mathf.CeilToInt((float)_vxgi.resolution / _threadsClear.x) threads.
+	//Therefore this protection is needed.
+	if (any(id >= Resolution)) return;
+
+	RadianceRG[id] = 0u;
+	RadianceBA[id] = 0u;
+	RadianceCount[id] = 0u;
+}
+
+[numthreads(64,1,1)]
+void CSRender(uint id : SV_DispatchThreadID)
+{
+  VoxelData data = VoxelBuffer.Consume();
+
+  DeviceMemoryBarrierWithGroupSync();//Ensure each thread get the different voxel data
+
+  if (!data.IsValid()) return;
+
+  float3 position = data.GetPosition();
+  float3 normal = data.GetNormal();
+  float4 color = data.GetColor();
+  float3 emission = data.GetEmission();
+
+  VoxelLightingData lightingData;
+  lightingData.color = color.rgb;
+  lightingData.voxelPosition = position;
+  lightingData.vecN = normal;
+  lightingData.Initialize();
+
+  color.rgb = emission + VoxelRadiance(lightingData); //Color supports HDR
+  color.a = saturate(color.a);
+
+  uint4 intColor = (uint4)round(color * RADIANCE_PRECISION);
+
+  position = min(position, Resolution - 1);
+
+  InterlockedAdd(RadianceRG[position], intColor.r | intColor.g << 16);//Color supports HDR, the color range is [0, 65536](Integer) and convert to HDR is [0, 255].
+  InterlockedAdd(RadianceBA[position], intColor.b | intColor.a << 16);//Improve: alpha no need HDR, can save space for storing RadianceCount data.
+  InterlockedAdd(RadianceCount[position], 1);
+}

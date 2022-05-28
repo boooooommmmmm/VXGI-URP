@@ -1,0 +1,25 @@
+using UnityEngine;
+using UnityEngine.Rendering;
+using VXGI_URP;
+
+public class Parameterizer : System.IDisposable {
+  int _kernelParameterize;
+  ComputeBuffer _arguments = new ComputeBuffer(3, sizeof(int), ComputeBufferType.IndirectArguments);
+  ComputeShader _compute = (ComputeShader)Resources.Load("VXGI/Compute/Parameterizer");
+
+  public Parameterizer(VXGI_URP_Feature feature, ComputeShader computeShader) {
+    _compute = computeShader;
+    _kernelParameterize = _compute.FindKernel("CSParameterize");
+    _arguments.SetData(new int[] { 1, 1, 1 });
+  }
+
+  public void Dispose() {
+    _arguments.Dispose();
+  }
+
+  public void Parameterize(CommandBuffer command, ComputeBuffer arguments, NumThreads numThreads) {
+    command.SetComputeIntParams(_compute, ShaderIDs.NumThreads, numThreads);
+    command.SetComputeBufferParam(_compute, _kernelParameterize, ShaderIDs.Arguments, arguments);
+    command.DispatchCompute(_compute, _kernelParameterize, _arguments, 0);
+  }
+}

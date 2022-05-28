@@ -22,6 +22,9 @@
 # Visual Studio cache directory
 .vs/
 
+# rider temporal file?
+.idea/
+
 # Gradle cache directory
 .gradle/
 
