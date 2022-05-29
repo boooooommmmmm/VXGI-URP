@@ -94,13 +94,10 @@ namespace VXGI_URP
                 return position * voxelSize;
             }
         }
-
         #endregion
-
-
+        
         int _resolution = 0;
         float _previousRefresh = 0f;
-        CommandBuffer _command;
         ComputeBuffer _lightSources;
         ComputeBuffer _voxelBuffer;
         List<LightSource> _lights;
@@ -112,8 +109,6 @@ namespace VXGI_URP
         Voxelizer _voxelizer;
         VoxelShader _voxelShader;
 
-        private bool _isInitialized = false;
-            
         private VXGI_PrePass prePass;
         private VXGI_DrawPass drawPass;
 
@@ -132,28 +127,23 @@ namespace VXGI_URP
             if (!limitRefreshRate || (_previousRefresh + 1f / refreshRate < time))
             {
                 _previousRefresh = time;
-                
-                renderer.EnqueuePass(prePass);
+
+                //Scene camera will not do voxel, for better performance and easier to debug.
+                //Scene camera will draw VXGI to help debug.
+                Camera camera = renderingData.cameraData.camera;
+                if (camera.cameraType == CameraType.Game)
+                    renderer.EnqueuePass(prePass);
                 renderer.EnqueuePass(drawPass);
             }
-
-            return;
         }
 
         void Initialize()
         {
-            // if (_isInitialized == false)
-            //     _isInitialized = true;
-            // else
-            //     return;
-            
             prePass = new VXGI_PrePass(this);
             prePass.renderPassEvent = RenderPassEvent.BeforeRenderingGbuffer;
-            
             drawPass = new VXGI_DrawPass(this, LightingShader);
-            // drawPass.renderPassEvent = RenderPassEvent.AfterRenderingDeferredLights;
             drawPass.renderPassEvent = RenderPassEvent.BeforeRenderingSkybox;
-
+            
             _lights = new List<LightSource>(64);
             _lightSources = new ComputeBuffer(64, LightSource.size);
             _mipmapper = new Mipmapper(this, MipComputeShader);
@@ -163,7 +153,7 @@ namespace VXGI_URP
             _lastVoxelSpaceCenter = voxelSpaceCenter;
 
             _resolution = (int)resolution;
-
+            
             CreateBuffers();
             CreateTextureDescriptor();
             CreateTextures();
@@ -171,19 +161,17 @@ namespace VXGI_URP
 
         protected override void Dispose(bool disposing)
         {
-            // _isInitialized = false;
-            //
-            // DisposeTextures();
-            // DisposeBuffers();
-            //
-            // _voxelShader.Dispose();
-            // _voxelizer.Dispose();
-            // _parameterizer.Dispose();
-            // _mipmapper.Dispose();
-            // _lightSources.Dispose();
-            // _command.Dispose();
+            DisposeTextures();
+            DisposeBuffers();
+        
+            _voxelShader.Dispose();
+            _voxelizer.Dispose();
+            _parameterizer.Dispose();
+            _mipmapper.Dispose();
+            _lightSources.Dispose();
 
             prePass.Dispose();
+            drawPass.Dispose();
         }
 
         #region Buffers
@@ -246,12 +234,18 @@ namespace VXGI_URP
 
         void DisposeTextures()
         {
+            //add null reference check, there might have bugs or invoking disorder when Unity is compiling script.
             foreach (var radiance in _radiances)
             {
-                radiance.DiscardContents();
-                radiance.Release();
-                DestroyImmediate(radiance);
+                if (radiance != null)
+                {
+                    radiance.DiscardContents();
+                    radiance.Release();
+                    DestroyImmediate(radiance);
+                }
             }
+
+            _radiances = null;
         }
 
         void ResizeTextures()
@@ -285,26 +279,18 @@ namespace VXGI_URP
         public VXGI_PrePass(VXGI_URP_Feature settings)
         {
             m_Feature = settings;
-            Initialization();
         }
 
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
             PrePass(context, ref renderingData);
             SetupShader(context);
-            return;
-        }
-
-        void Initialization()
-        {
         }
 
         void PrePass(ScriptableRenderContext renderContext, ref RenderingData renderingData)
         {
             Camera camera = renderingData.cameraData.camera;
-            if (camera.cameraType != CameraType.Game)
-                return;
-            if (m_Feature.followCamera && camera.cameraType == CameraType.Game)
+            if (m_Feature.followCamera)
                 m_Feature.center = camera.transform.position;
 
             var displacement = (m_Feature.voxelSpaceCenter - m_Feature.lastVoxelSpaceCenter) / m_Feature.voxelSize;
@@ -313,7 +299,6 @@ namespace VXGI_URP
             {
                 m_Feature.mipmapper.Shift(renderContext, Vector3Int.RoundToInt(displacement));
             }
-
 
             m_Feature.voxelizer.Voxelize(renderContext, ref renderingData);
             m_Feature.voxelShader.Render(renderContext);
@@ -326,7 +311,6 @@ namespace VXGI_URP
             cmd.SetViewProjectionMatrices(camera.worldToCameraMatrix, camera.projectionMatrix);
             renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
-            
         }
         
         void SetupShader(ScriptableRenderContext context)

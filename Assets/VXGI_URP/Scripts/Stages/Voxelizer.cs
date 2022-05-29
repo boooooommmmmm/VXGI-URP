@@ -82,44 +82,26 @@ public class Voxelizer : System.IDisposable {
 
   void Initialize()
   {
-    CreateCamera();
+    // CreateCamera(); //calling create GameObject when OnAwake may cause bugs
     CreateCameraDescriptor();
-    CreateCameraSettings();
+    // CreateCameraSettings();
   }
 
   void CreateCamera() {
     //Add multiple create protection
     if (_camera)
       return;
-
-    DestroyCameras();
     
-    //disable hidden flag for easier debugging
-    var gameObject = new GameObject("__" + _vxgi.name + "_VOXELIZER__") { tag = _cameraTag/*hideFlags = HideFlags.HideAndDontSave*/ };
+    var gameObject = new GameObject("__" + _vxgi.name + "_VOXELIZER__") { tag = _cameraTag, hideFlags = HideFlags.HideAndDontSave };
     gameObject.SetActive(false);
 
     _camera = gameObject.AddComponent<Camera>();
     _camera.allowMSAA = true;
     _camera.aspect = 1f;
     _camera.orthographic = true;
+    
+    CreateCameraSettings();
   }
-  
-  void DestroyCameras()
-  {
-#if UNITY_EDITOR
-    GameObject[] gos = GameObject.FindGameObjectsWithTag(_cameraTag);
-    if (gos == null || gos.Length == 0)
-      return;
-    foreach (GameObject go in gos)
-    {
-      if (Application.isPlaying)
-        Object.DestroyImmediate(go);
-      else
-        Object.DestroyImmediate(go);
-    }
-#endif
-  }
-
 
   void CreateCameraDescriptor() {
     _descriptor = new RenderTextureDescriptor() {
