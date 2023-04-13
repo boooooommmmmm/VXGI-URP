@@ -74,11 +74,11 @@ Shader "Hidden/VXGI_URP/Voxelization"
         return o;
       }
 
-      //Swizzle and restore axis for reduce voxelize cracks. More information please check this site:
+      //Swizzle and restore axis for reduce voxelization cracks. More information please check this site:
       //https://developer.nvidia.com/content/basics-gpu-voxelization
-      //For example noramal y is max, means y axis has the lowest gradients, we need swap y axis to z
+      //For example, normal y is max, means y axis has the lowest gradients, we need swap y axis to z
       //(Left-Handed Coordinate System) in this case, we have y => z, x => x, z => -y
-      //then roate it to positive, we get x => y, y => z, z => x
+      //then rotate it to positive, we get x => y, y => z, z => x
       //in order to map current projection to optimized projection, we need reverse the mapping.
       //So we get x => z, y => x, z => y
       //Equals to positionNew.xyz = positionOld.zxy.
@@ -180,10 +180,10 @@ Shader "Hidden/VXGI_URP/Voxelization"
 
         float3 voxelPosition = float3(i.position.xy, i.position.z * Resolution);
 
-        //due to the render target resolution equlas render quality (e.g. 64 * 64 * 64)
+        //due to the render target resolution equals render quality (e.g. 64 * 64 * 64)
         //triangles pass the rasterization can represent a voxel
-        //extra coordinate swizzle has been excuted to avoide voxel "cracks"
-        //reture value means nothing in this pass.
+        //extra coordinate swizzle has been executed to avoid voxel "cracks"
+        //return value means nothing in this pass.
         VoxelData d;
         d.Initialize();
         d.SetPosition(RestoreAxis(voxelPosition, i.axis));
@@ -193,7 +193,7 @@ Shader "Hidden/VXGI_URP/Voxelization"
         d.SetEmission(emission + ShadeSH9(float4(i.normal, 1.0)));
         VoxelBuffer.Append(d);
 
-		    //In fact, we don't care about the return value. The reture value can be used for dubuge in Frame debugger.
+		    //In fact, we don't care about the return value. The return value can be used for debugging in Frame debugger.
 		    //However, the targetRT's color format is R8 in order to save GFX. Therefore, can only debug a single channel. 
 		    //BTW, The target RT is a 2d render texture (dimension = TextureDimension.Tex2D) not 3d.
 		    return 0.0;

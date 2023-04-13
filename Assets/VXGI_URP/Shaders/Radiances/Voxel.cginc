@@ -69,10 +69,10 @@
 
       //Size will be converted to mip level
       //size and direction multiples 2 not size += sizeBase or direction += normalize(direction)
-      //is because higher level of mipmap can cover the same distance than sum of pervious distane. 
+      //is because higher level of mipmap can cover the same distance than sum of previous distance. 
       for (
         float3 coordinate = apex + direction;
-        incoming.a < 0.95 && TextureSDF(coordinate) > 0.0;//use sdf to enaure position is in side of voxel bound
+        incoming.a < 0.95 && TextureSDF(coordinate) > 0.0;//use sdf to ensure position is in side of voxel bound
         size *= 2, direction *= 2.0, coordinate = apex + direction
       ) {
         incoming += 0.5 * (1.0 - incoming.a) * SampleRadiance(coordinate, size);//alpha channel is Opacity/Visibility
